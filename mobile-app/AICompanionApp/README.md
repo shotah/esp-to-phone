@@ -49,6 +49,7 @@ This app uses **react-native-ble-plx** for modern Bluetooth Low Energy communica
 ### Recommended BLE Library
 
 **Library:** `react-native-ble-plx`
+
 - **NPM:** https://www.npmjs.com/package/react-native-ble-plx
 - **GitHub:** https://github.com/dotintent/react-native-ble-plx
 - **Example:** https://github.com/PolideaPlayground/SensorTag
@@ -56,6 +57,7 @@ This app uses **react-native-ble-plx** for modern Bluetooth Low Energy communica
 ### BLE Library Features
 
 ✅ **Supported:**
+
 - Observing device's Bluetooth adapter state
 - Scanning BLE devices
 - Making connections to peripherals
@@ -68,6 +70,7 @@ This app uses **react-native-ble-plx** for modern Bluetooth Low Energy communica
 - Turning the device's Bluetooth adapter on
 
 ❌ **Not Supported:**
+
 - Bluetooth classic devices
 - Communicating between phones using BLE (Peripheral support)
 - Bonding peripherals
@@ -76,11 +79,13 @@ This app uses **react-native-ble-plx** for modern Bluetooth Low Energy communica
 ### BLE Setup Instructions
 
 1. **Install the modern BLE library:**
+
    ```bash
    npm install react-native-ble-plx
    ```
 
 2. **Android Configuration:**
+
    - Minimum SDK version: 23
    - Add to `android/build.gradle`:
      ```gradle
@@ -117,6 +122,7 @@ This app uses **react-native-ble-plx** for modern Bluetooth Low Energy communica
 ### Communication Protocol
 
 The app communicates via BLE with MTU negotiation using JSON messages:
+
 ```json
 // ESP32 → App
 {
@@ -171,6 +177,7 @@ make doctor              # Run React Native doctor
 ## Troubleshooting
 
 ### Build Issues
+
 ```bash
 make clean-all           # Deep clean
 make setup-env           # Reconfigure environment
@@ -178,12 +185,14 @@ make android-debug       # Try building again
 ```
 
 ### BLE Connection Issues
+
 - Ensure device Bluetooth is enabled
 - Check ESP32 is advertising BLE services
 - Verify location permissions are granted
 - Check Android 12+ permission requirements
 
 ### Development
+
 ```bash
 make android-logs        # View device logs
 make debug-info          # Show system information

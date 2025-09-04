@@ -55,6 +55,7 @@ dkms.conf
 .pio/
 compile_commands.json
 .vscode/c_cpp_properties.json
+firmware/.cache/
 
 # React Native
 mobile-app/*/node_modules/

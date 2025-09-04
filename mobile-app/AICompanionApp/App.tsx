@@ -70,6 +70,7 @@ function AppContent() {
   const [isScanning, setIsScanning] = useState(false);
   const [bleManager] = useState(() => new BleManager());
   const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [appMode, setAppMode] = useState<AppMode>('chat');
   const [dynamicUUIDs, setDynamicUUIDs] = useState<QRData | null>(null);
   const [qrInput, setQrInput] = useState<string>('');
@@ -146,8 +147,6 @@ function AppContent() {
     }
   }, [connectedDevice]);
 
-
-
   const requestPermissions = async () => {
     if (Platform.OS === 'android') {
       try {
@@ -219,6 +218,11 @@ function AppContent() {
       type: type,
     };
     setMessages(prev => [...prev, newMessage]);
+
+    // Auto-scroll to bottom when new message is added
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
   // BLE Scanning Function
@@ -262,10 +266,7 @@ function AppContent() {
         deviceCount++;
 
         if (device) {
-          const deviceInfo =
-            (device.name || 'Unknown') + ' (RSSI: ' + device.rssi + ')';
-          addMessage('📡 Found: ' + deviceInfo, 'ai');
-
+          // Only show notification for ESP32 device, not every BLE device
           if (device.name === 'AI-Companion') {
             foundEsp32 = true;
             console.log('Found ESP32 device! Connecting...');
@@ -412,9 +413,10 @@ function AppContent() {
       // Use dynamic UUIDs from QR code if available, otherwise fallback to static
       const currentServiceUUID = dynamicUUIDs?.serviceUUID || SERVICE_UUID;
       const currentTxUUID = dynamicUUIDs?.txUUID || CHARACTERISTIC_UUID_TX;
-      
+
       const targetService = services.find(
-        service => service.uuid.toLowerCase() === currentServiceUUID.toLowerCase(),
+        service =>
+          service.uuid.toLowerCase() === currentServiceUUID.toLowerCase(),
       );
       console.log('Target service found:', !!targetService);
       console.log('Looking for service UUID:', currentServiceUUID);
@@ -438,8 +440,7 @@ function AppContent() {
       });
 
       const txCharacteristic = characteristics.find(
-        char =>
-          char.uuid.toLowerCase() === currentTxUUID.toLowerCase(),
+        char => char.uuid.toLowerCase() === currentTxUUID.toLowerCase(),
       );
       console.log('TX characteristic found:', !!txCharacteristic);
       console.log('Looking for TX UUID:', currentTxUUID);
@@ -565,12 +566,11 @@ function AppContent() {
         console.log(`Characteristic ${index} UUID: ${char.uuid}`);
       });
 
-      // Re-declare UUID for this scope  
+      // Re-declare UUID for this scope
       const currentRxUUID2 = dynamicUUIDs?.rxUUID || CHARACTERISTIC_UUID_RX;
-      
+
       const rxCharacteristic = characteristics.find(
-        char =>
-          char.uuid.toLowerCase() === currentRxUUID2.toLowerCase(),
+        char => char.uuid.toLowerCase() === currentRxUUID2.toLowerCase(),
       );
       console.log('RX characteristic found:', !!rxCharacteristic);
       console.log('Looking for RX UUID:', currentRxUUID2);
@@ -635,22 +635,27 @@ function AppContent() {
         console.log('Invalid QR format - must start with BLE:');
         return null;
       }
-      
+
       const parts = qrData.split(':');
       if (parts.length !== 4) {
         console.log('Invalid QR format - expected 4 parts separated by :');
         return null;
       }
-      
+
       const [, serviceUUID, txUUID, rxUUID] = parts;
-      
+
       // Validate UUID format (36 characters with dashes)
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(serviceUUID) || !uuidRegex.test(txUUID) || !uuidRegex.test(rxUUID)) {
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (
+        !uuidRegex.test(serviceUUID) ||
+        !uuidRegex.test(txUUID) ||
+        !uuidRegex.test(rxUUID)
+      ) {
         console.log('Invalid UUID format in QR code');
         return null;
       }
-      
+
       return { serviceUUID, txUUID, rxUUID };
     } catch (error) {
       console.error('Error parsing QR data:', error);
@@ -659,53 +664,66 @@ function AppContent() {
   }, []);
 
   // Handle QR code camera scan success
-  const onSuccess = useCallback((e: any) => {
-    const qrData = parseQRData(e.data);
-    if (qrData) {
-      setDynamicUUIDs(qrData);
-      setAppMode('chat');
-      
-      // Add success message
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        text: `📱 QR Code scanned! Found ESP32 with service: ${qrData.serviceUUID.substring(0, 8)}...`,
-        timestamp: new Date(),
-        type: 'device',
-      };
-      setMessages(prev => [...prev, newMessage]);
-      
-      console.log('QR code successfully scanned and parsed, dynamic UUIDs set');
-    } else {
-      // Add error message
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        text: '❌ Invalid QR code format. Please scan a valid ESP32 QR code.',
-        timestamp: new Date(),
-        type: 'device',
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    }
-  }, [parseQRData]);
+  const onSuccess = useCallback(
+    (e: any) => {
+      const qrData = parseQRData(e.data);
+      if (qrData) {
+        setDynamicUUIDs(qrData);
+        setAppMode('chat');
+
+        // Add success message
+        const newMessage: Message = {
+          id: Date.now().toString(),
+          text: `📱 QR Code scanned! Found ESP32 with service: ${qrData.serviceUUID.substring(
+            0,
+            8,
+          )}...`,
+          timestamp: new Date(),
+          type: 'device',
+        };
+        setMessages(prev => [...prev, newMessage]);
+
+        console.log(
+          'QR code successfully scanned and parsed, dynamic UUIDs set',
+        );
+      } else {
+        // Add error message
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          text: '❌ Invalid QR code format. Please scan a valid ESP32 QR code.',
+          timestamp: new Date(),
+          type: 'device',
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      }
+    },
+    [parseQRData],
+  );
 
   // Handle QR code text input submission
-  
+
   const handleQRSubmit = useCallback(() => {
     const qrData = parseQRData(qrInput);
     if (qrData) {
       setDynamicUUIDs(qrData);
       setAppMode('chat');
       setQrInput('');
-      
+
       // Add success message
       const newMessage: Message = {
         id: Date.now().toString(),
-        text: `📝 QR Code processed! Found ESP32 with service: ${qrData.serviceUUID.substring(0, 8)}...`,
+        text: `📝 QR Code processed! Found ESP32 with service: ${qrData.serviceUUID.substring(
+          0,
+          8,
+        )}...`,
         timestamp: new Date(),
         type: 'device',
       };
       setMessages(prev => [...prev, newMessage]);
-      
-      console.log('QR code successfully parsed from text input, dynamic UUIDs set');
+
+      console.log(
+        'QR code successfully parsed from text input, dynamic UUIDs set',
+      );
     } else {
       // Add error message
       const errorMessage: Message = {
@@ -794,28 +812,48 @@ function AppContent() {
       {appMode === 'qr_scanner' && (
         <View style={styles.qrContainer}>
           <View style={styles.qrHeader}>
-            <TouchableOpacity 
-              style={styles.backButton} 
+            <TouchableOpacity
+              style={styles.backButton}
               onPress={() => setAppMode('chat')}
             >
               <Text style={styles.backButtonText}>← Back</Text>
             </TouchableOpacity>
             <Text style={styles.qrTitle}>Scan ESP32 QR Code</Text>
           </View>
-          
+
           {/* Mode Toggle */}
           <View style={styles.qrModeToggle}>
-            <TouchableOpacity 
-              style={[styles.qrModeButton, qrMode === 'camera' && styles.qrModeButtonActive]} 
+            <TouchableOpacity
+              style={[
+                styles.qrModeButton,
+                qrMode === 'camera' && styles.qrModeButtonActive,
+              ]}
               onPress={() => setQrMode('camera')}
             >
-              <Text style={[styles.qrModeButtonText, qrMode === 'camera' && styles.qrModeButtonTextActive]}>📷 Camera</Text>
+              <Text
+                style={[
+                  styles.qrModeButtonText,
+                  qrMode === 'camera' && styles.qrModeButtonTextActive,
+                ]}
+              >
+                📷 Camera
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.qrModeButton, qrMode === 'text' && styles.qrModeButtonActive]} 
+            <TouchableOpacity
+              style={[
+                styles.qrModeButton,
+                qrMode === 'text' && styles.qrModeButtonActive,
+              ]}
               onPress={() => setQrMode('text')}
             >
-              <Text style={[styles.qrModeButtonText, qrMode === 'text' && styles.qrModeButtonTextActive]}>📝 Text</Text>
+              <Text
+                style={[
+                  styles.qrModeButtonText,
+                  qrMode === 'text' && styles.qrModeButtonTextActive,
+                ]}
+              >
+                📝 Text
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -849,7 +887,7 @@ function AppContent() {
               <Text style={styles.qrInstructions}>
                 Enter the QR code data from your ESP32 device:
               </Text>
-              
+
               <TextInput
                 style={styles.qrTextInput}
                 value={qrInput}
@@ -861,21 +899,25 @@ function AppContent() {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              
-              <TouchableOpacity 
-                style={[styles.qrSubmitButton, !qrInput.trim() && styles.qrSubmitButtonDisabled]} 
+
+              <TouchableOpacity
+                style={[
+                  styles.qrSubmitButton,
+                  !qrInput.trim() && styles.qrSubmitButtonDisabled,
+                ]}
                 onPress={handleQRSubmit}
                 disabled={!qrInput.trim()}
               >
                 <Text style={styles.buttonText}>Process QR Code</Text>
               </TouchableOpacity>
-              
+
               <View style={styles.qrBottom}>
                 <Text style={styles.qrHelp}>
                   Expected format: BLE:service_uuid:tx_uuid:rx_uuid
                 </Text>
                 <Text style={styles.qrExample}>
-                  Example: BLE:6E400001-B5A3-F393-E0A9-E50E24DCCA9E:6E400003-B5A3-F393-E0A9-E50E24DCCA9E:6E400002-B5A3-F393-E0A9-E50E24DCCA9E
+                  Example:
+                  BLE:6E400001-B5A3-F393-E0A9-E50E24DCCA9E:6E400003-B5A3-F393-E0A9-E50E24DCCA9E:6E400002-B5A3-F393-E0A9-E50E24DCCA9E
                 </Text>
               </View>
             </View>
@@ -888,116 +930,123 @@ function AppContent() {
         <>
           {/* Header */}
           <View style={styles.header}>
-        <Text style={styles.headerTitle}>AI Companion</Text>
-        <View style={styles.connectionStatus}>
-          <View
-            style={[
-              styles.statusIndicator,
-              { backgroundColor: getStatusIndicatorColor() },
-            ]}
-          />
-          <Text style={styles.statusText}>
-            {isScanning
-              ? 'Scanning...'
-              : isConnected
-              ? `Connected to ${deviceName}`
-              : 'Ready to Connect'}
-          </Text>
-        </View>
-      </View>
-
-      {/* Messages */}
-      <ScrollView style={styles.messagesContainer}>
-        {messages.map(message => (
-          <TouchableOpacity
-            key={message.id}
-            style={[
-              styles.messageCard,
-              message.type === 'ai' && styles.aiMessage,
-              message.type === 'user' && styles.userMessage,
-              message.type === 'device' && styles.deviceMessage,
-            ]}
-            onPress={() => toggleMessageExpansion(message.id)}
-          >
-            <View style={styles.messageHeader}>
-              <Text style={styles.messageType}>
-                {message.type === 'ai'
-                  ? '🤖 AI'
-                  : message.type === 'user'
-                  ? '👤 You'
-                  : '⌚ Device'}
-              </Text>
-              <Text style={styles.messageTime}>
-                {message.timestamp.toLocaleTimeString()}
+            <Text style={styles.headerTitle}>AI Companion</Text>
+            <View style={styles.connectionStatus}>
+              <View
+                style={[
+                  styles.statusIndicator,
+                  { backgroundColor: getStatusIndicatorColor() },
+                ]}
+              />
+              <Text style={styles.statusText}>
+                {isScanning
+                  ? 'Scanning...'
+                  : isConnected
+                  ? `Connected to ${deviceName}`
+                  : 'Ready to Connect'}
               </Text>
             </View>
-            <Text
-              style={[
-                styles.messageText,
-                message.expanded && styles.expandedText,
-              ]}
-            >
-              {message.expanded || message.text.length <= 100
-                ? message.text
-                : `${message.text.substring(0, 100)}...`}
-            </Text>
-            {message.text.length > 100 && (
-              <Text style={styles.expandHint}>
-                {message.expanded ? 'Tap to collapse' : 'Tap to expand'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+          </View>
 
-      {/* Controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            {
-              backgroundColor: getConnectionButtonColor(),
-            },
-          ]}
-          onPress={handleConnection}
-          disabled={isScanning}
-        >
-          <Text style={styles.buttonText}>
-            {isScanning
-              ? 'Scanning...'
-              : isConnected
-              ? 'Disconnect'
-              : 'Connect to ESP32'}
-          </Text>
-        </TouchableOpacity>
-
-        {!isConnected && (
-          <TouchableOpacity
-            style={styles.permissionsButton}
-            onPress={requestPermissions}
+          {/* Messages */}
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.messagesContainer}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.buttonText}>🔐 Request Permissions</Text>
-          </TouchableOpacity>
-        )}
+            {messages.map(message => (
+              <TouchableOpacity
+                key={message.id}
+                style={[
+                  styles.messageCard,
+                  message.type === 'ai' && styles.aiMessage,
+                  message.type === 'user' && styles.userMessage,
+                  message.type === 'device' && styles.deviceMessage,
+                ]}
+                onPress={() => toggleMessageExpansion(message.id)}
+              >
+                <View style={styles.messageHeader}>
+                  <Text style={styles.messageType}>
+                    {message.type === 'ai'
+                      ? '🤖 AI'
+                      : message.type === 'user'
+                      ? '👤 You'
+                      : '⌚ Device'}
+                  </Text>
+                  <Text style={styles.messageTime}>
+                    {message.timestamp.toLocaleTimeString()}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.messageText,
+                    message.expanded && styles.expandedText,
+                  ]}
+                >
+                  {message.expanded || message.text.length <= 100
+                    ? message.text
+                    : `${message.text.substring(0, 100)}...`}
+                </Text>
+                {message.text.length > 100 && (
+                  <Text style={styles.expandHint}>
+                    {message.expanded ? 'Tap to collapse' : 'Tap to expand'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-        {isConnected && (
-          <TouchableOpacity style={styles.testButton} onPress={sendTestMessage}>
-            <Text style={styles.buttonText}>Send Test Message</Text>
-          </TouchableOpacity>
-        )}
+          {/* Controls */}
+          <View style={styles.controls}>
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                {
+                  backgroundColor: getConnectionButtonColor(),
+                },
+              ]}
+              onPress={handleConnection}
+              disabled={isScanning}
+            >
+              <Text style={styles.buttonText}>
+                {isScanning
+                  ? 'Scanning...'
+                  : isConnected
+                  ? 'Disconnect'
+                  : 'Connect to ESP32'}
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity style={styles.infoButton} onPress={showBLEInfo}>
-          <Text style={styles.buttonText}>📖 BLE Implementation Guide</Text>
-        </TouchableOpacity>
+            {!isConnected && (
+              <TouchableOpacity
+                style={styles.permissionsButton}
+                onPress={requestPermissions}
+              >
+                <Text style={styles.buttonText}>🔐 Request Permissions</Text>
+              </TouchableOpacity>
+            )}
 
-        {/* QR Scanner Button */}
-        <TouchableOpacity 
-          style={styles.qrButton} 
-          onPress={() => setAppMode('qr_scanner')}
-        >
-          <Text style={styles.buttonText}>📱 Scan QR Code</Text>
-        </TouchableOpacity>
-      </View>
+            {isConnected && (
+              <TouchableOpacity
+                style={styles.testButton}
+                onPress={sendTestMessage}
+              >
+                <Text style={styles.buttonText}>Send Test Message</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.infoButton} onPress={showBLEInfo}>
+              <Text style={styles.buttonText}>📖 BLE Implementation Guide</Text>
+            </TouchableOpacity>
+
+            {/* QR Scanner Button */}
+            <TouchableOpacity
+              style={styles.qrButton}
+              onPress={() => setAppMode('qr_scanner')}
+            >
+              <Text style={styles.buttonText}>📱 Scan QR Code</Text>
+            </TouchableOpacity>
+          </View>
         </>
       )}
     </View>
@@ -1007,7 +1056,7 @@ function AppContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a1a1a',
   },
   header: {
     backgroundColor: '#2196F3',
@@ -1041,13 +1090,13 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   messageCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#2a2a2a',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -1072,16 +1121,16 @@ const styles = StyleSheet.create({
   messageType: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: '#aaa',
   },
   messageTime: {
     fontSize: 12,
-    color: '#999',
+    color: '#777',
   },
   messageText: {
     fontSize: 16,
     lineHeight: 22,
-    color: '#333',
+    color: '#e0e0e0',
   },
   expandedText: {
     // Additional styles for expanded text if needed
@@ -1094,9 +1143,9 @@ const styles = StyleSheet.create({
   },
   controls: {
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: '#2a2a2a',
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: '#444',
   },
   primaryButton: {
     backgroundColor: '#2196F3',
@@ -1136,7 +1185,7 @@ const styles = StyleSheet.create({
   // QR Scanner Styles
   qrContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a1a1a',
   },
   qrHeader: {
     backgroundColor: '#2196F3',
@@ -1201,15 +1250,15 @@ const styles = StyleSheet.create({
   },
   qrInstructions: {
     fontSize: 16,
-    color: '#333',
+    color: '#e0e0e0',
     textAlign: 'center',
     marginBottom: 20,
     fontWeight: '500',
   },
   qrTextInput: {
-    backgroundColor: 'white',
+    backgroundColor: '#2a2a2a',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#555',
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
@@ -1217,6 +1266,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     minHeight: 80,
     marginBottom: 16,
+    color: '#e0e0e0',
   },
   qrSubmitButton: {
     backgroundColor: '#4CAF50',
@@ -1229,22 +1279,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
   },
   qrBottom: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#2a2a2a',
     padding: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#eee',
+    borderColor: '#444',
   },
   qrHelp: {
     fontSize: 14,
-    color: '#666',
+    color: '#aaa',
     textAlign: 'center',
     marginBottom: 8,
     fontWeight: '500',
   },
   qrExample: {
     fontSize: 12,
-    color: '#999',
+    color: '#777',
     textAlign: 'center',
     fontFamily: 'monospace',
   },
