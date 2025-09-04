@@ -1,13 +1,13 @@
-# AI Companion Device - ESP32 to Phone Communication
+# ESP32 Touch Device - BLE Communication System
 
-A complete wearable AI assistant companion system featuring an ESP32 T-Display AMOLED device that communicates with a React Native mobile app via Bluetooth.
+A proof-of-concept touch interface device using ESP32 T-Display AMOLED that communicates with a React Native mobile app via Bluetooth Low Energy.
 
 ## 🎯 Project Overview
 
-This project implements a wearable AI assistant interface consisting of:
+This project demonstrates BLE communication between two devices:
 
-1. **ESP32 T-Display AMOLED Device** - Wearable companion with LVGL 9.3.0 UI
-2. **React Native Mobile App** - Android app for Google Pixel 8 Pro with Bluetooth connectivity
+1. **ESP32 T-Display AMOLED Device** - Touch interface with LVGL 9.3.0 UI
+2. **React Native Mobile App** - Android app with Bluetooth Low Energy connectivity
 
 ## 📁 Project Structure
 
@@ -30,6 +30,24 @@ esp-to-phone/
 
 
 ```
+
+## 📹 Demo Videos
+
+Watch the complete build and demonstration process:
+
+### ESP32 Firmware Build & Upload Process
+📺 **[ESP32 Build & Upload Demo](https://drive.google.com/file/d/1tfCH_RfHY0vfRteDODtnLQhBAn18tVjw/view?usp=sharing)**
+- Complete firmware compilation with PlatformIO
+- USB connection and device upload process
+- Real-time build output and success verification
+
+### Android App Build & BLE Communication
+📱 **[React Native App & BLE Demo](https://drive.google.com/file/d/14VqLiNZARf0lIsb_HLVTyGlHeWoxKfY-/view?usp=sharing)**
+- React Native app compilation and Android deployment
+- Live Bluetooth scanning and ESP32 device connection
+- Real-time bidirectional message exchange demonstration
+
+> **Note**: These demonstration videos (42MB each) show the complete development workflow and real-time communication between the ESP32 device and Android application.
 
 ## ✨ Features
 
@@ -108,211 +126,16 @@ esp-to-phone/
 
 ---
 
-## 🔐 BLE Security Implementation Guide
+## 🔐 BLE Security & Device Management Roadmap
 
-### Implementing BLE Bonding (Phase 1)
+**Current Status**: Basic BLE communication (proof of concept)  
+**Security Level**: Development/Demo (not production-ready)
 
-#### ESP32 Firmware Changes:
-```cpp
-// Add to ESP32 main.cpp
-#include <BLESecurity.h>
-
-// In setup() function:
-BLEDevice::init("AI-Companion-Secured");
-BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
-BLEDevice::setSecurityCallbacks(new MySecurityCallbacks());
-
-// Security callback class
-class MySecurityCallbacks : public BLESecurityCallbacks {
-    uint32_t onPassKeyRequest() {
-        // Return 6-digit PIN for authentication
-        return 123456; // In production, generate random PIN
-    }
-
-    void onPassKeyNotify(uint32_t pass_key) {
-        // Display PIN on ESP32 screen for user to enter on phone
-        Serial.printf("🔐 Pairing PIN: %06d\n", pass_key);
-        // Update display with PIN
-    }
-
-    bool onConfirmPIN(uint32_t pass_key) {
-        // Verify PIN if needed
-        return true;
-    }
-
-    bool onSecurityRequest() {
-        // Accept security requests
-        return true;
-    }
-
-    void onAuthenticationComplete(esp_ble_auth_cmpl_t auth_cmpl) {
-        if (auth_cmpl.success) {
-            Serial.println("🔐 Authentication successful - devices bonded!");
-        } else {
-            Serial.println("❌ Authentication failed");
-        }
-    }
-};
-```
-
-#### React Native App Changes:
-```javascript
-// Add to App.tsx
-const requestConnection = async (device) => {
-  try {
-    // Request bonding during connection
-    await device.connect({
-      autoConnect: true,
-      requestMTU: 256,
-      refreshGatt: true
-    });
-
-    // Enable bonding
-    if (Platform.OS === 'android') {
-      await BleManager.createBond(device.id);
-    }
-
-    console.log('🔐 Device bonded successfully');
-  } catch (error) {
-    console.error('Bonding failed:', error);
-  }
-};
-```
-
-### Device Management UI (Phase 3)
-
-#### Bonded Devices Storage:
-```cpp
-// ESP32 bonded device storage
-#include <Preferences.h>
-Preferences preferences;
-
-struct BondedDevice {
-    char address[18];
-    char name[32];
-    uint32_t lastConnected;
-};
-
-std::vector<BondedDevice> bondedDevices;
-
-// Save bonded device
-void saveBondedDevice(const char* address, const char* name) {
-    BondedDevice device;
-    strcpy(device.address, address);
-    strcpy(device.name, name);
-    device.lastConnected = millis();
-
-    bondedDevices.push_back(device);
-
-    // Save to flash memory
-    preferences.begin("bonded_devices", false);
-    preferences.putString(address, name);
-    preferences.end();
-}
-```
-
-#### Device Unpairing:
-```cpp
-// Remove bonded device
-void removeBondedDevice(const char* address) {
-    // Remove from ESP32 memory
-    auto it = std::remove_if(bondedDevices.begin(), bondedDevices.end(),
-        [address](const BondedDevice& device) {
-            return strcmp(device.address, address) == 0;
-        });
-    bondedDevices.erase(it, bondedDevices.end());
-
-    // Remove from flash
-    preferences.begin("bonded_devices", false);
-    preferences.remove(address);
-    preferences.end();
-
-    // Disconnect if currently connected
-    if (deviceConnected) {
-        BLEDevice::getServer()->disconnect(BLEDevice::getServer()->getConnId());
-    }
-
-    Serial.printf("🗑️ Device %s unpaired\n", address);
-}
-```
-
-### Mobile App Device Management:
-```javascript
-// Device management functions
-const unpairDevice = async (deviceId) => {
-  try {
-    // Send unpairing command to ESP32
-    await sendBLEMessage('unpair', deviceId, 'management');
-
-    // Remove from Android bonding
-    if (Platform.OS === 'android') {
-      await BleManager.removeBond(deviceId);
-    }
-
-    // Update local device list
-    setBondedDevices(prev => prev.filter(device => device.id !== deviceId));
-
-    Alert.alert('Success', 'Device unpaired successfully');
-  } catch (error) {
-    Alert.alert('Error', 'Failed to unpair device: ' + error.message);
-  }
-};
-
-const getBondedDevices = async () => {
-  try {
-    if (Platform.OS === 'android') {
-      const bonded = await BleManager.getBondedDevices();
-      setBondedDevices(bonded);
-    }
-  } catch (error) {
-    console.error('Failed to get bonded devices:', error);
-  }
-};
-```
-
-### Security Monitoring:
-```cpp
-// Connection attempt logging
-void logConnectionAttempt(const char* address, bool success) {
-    Serial.printf("🔐 Connection attempt from %s: %s\n",
-                  address, success ? "SUCCESS" : "FAILED");
-
-    // Store in security log (could be saved to SD card)
-    securityLog.push_back({
-        address: String(address),
-        timestamp: millis(),
-        success: success
-    });
-}
-
-// Periodic security check
-void securityCheck() {
-    static unsigned long lastCheck = 0;
-    if (millis() - lastCheck > 60000) { // Check every minute
-        // Verify current connection is still valid
-        if (deviceConnected) {
-            BLEAddress currentAddr = BLEDevice::getServer()->getPeerAddress(
-                BLEDevice::getServer()->getConnId());
-
-            // Check if device is still in whitelist
-            bool isAuthorized = false;
-            for (const auto& device : bondedDevices) {
-                if (strcmp(device.address, currentAddr.toString().c_str()) == 0) {
-                    isAuthorized = true;
-                    break;
-                }
-            }
-
-            if (!isAuthorized) {
-                Serial.println("🚨 Unauthorized device detected - disconnecting!");
-                BLEDevice::getServer()->disconnect(
-                    BLEDevice::getServer()->getConnId());
-            }
-        }
-        lastCheck = millis();
-    }
-}
-```
+### Next Steps for Production Deployment:
+- **Phase 1**: Implement BLE bonding and encryption
+- **Phase 2**: Add device authentication and pairing management  
+- **Phase 3**: Multi-device support with secure device registry
+- **Phase 4**: Connection attempt monitoring and security logging
 
 ## 🔗 Communication Protocol
 
@@ -381,18 +204,21 @@ The devices communicate via **Bluetooth Low Energy (BLE)** using JSON messages w
 ### Live Demonstration Images
 
 #### ESP32 Device States
-| Ready to Connect | Message Exchange | Device in Hand |
+
+| Ready to Connect | Live Connection | Message Exchange |
 |------------------|------------------|----------------|
-| ![Ready to Connect](images/ready_to_connect.jpg) | ![Message Sent](images/message_sent.jpg) | ![Device Held Ready](images/held_ready_to_connect.jpg) |
-| Device powered on and advertising | Real-time message display | Wearable form factor demonstration |
+| <img src="images/ready_to_connect.jpg" width="300"> | <img src="images/connected.jpg" width="300"> | <img src="images/message_sent.jpg" width="300"> |
+| Device powered on and advertising | Real-time message display | Real-time communication |
 
 #### Mobile App Interface
-| Bluetooth Setup | Live Connection | Message Exchange | Technical Payload |
-|-----------------|-----------------|------------------|-------------------|
-| ![App Bluetooth On](images/app_bluetooth_on.png) | ![App Message Received](images/app_message_received.png) | ![Connected](images/connected.jpg) | ![React Payload](images/react_payload.png) |
-| Ready to scan and connect | Live message from ESP32 | Real-time communication | BLE JSON payload parsing |
+
+| Bluetooth Setup | Message Received | Technical Payload |
+|-----------------|-----------------|-------------------|
+| <img src="images/app_bluetooth_on.png" width="250"> | <img src="images/app_message_received.png" width="250"> | <img src="images/react_payload.jpg" width="250"> |
+| Ready to scan and connect | Live message from ESP32 | BLE JSON payload parsing |
 
 #### Technical Proof of Concept
+
 | BLE Protocol Success | JSON Message Parsing | Real-time Communication |
 |---------------------|----------------------|-------------------------|
 | ![React Payload](images/react_payload.png) | 48-character JSON payload successfully parsed | Bidirectional ESP32 ↔ React Native communication |
@@ -406,7 +232,9 @@ The ESP32 device features:
 - **Real-time Status**: Live connection state updates
 
 ### Mobile App Features Shown
+
 The mobile app includes:
+
 - **Connection Management**: Device scanning and pairing with permission handling
 - **Message History**: Expandable conversation view with timestamps
 - **Real-time Updates**: Live connection status with color-coded indicators  
@@ -416,6 +244,7 @@ The mobile app includes:
 ## 🔧 Development
 
 ### Building Firmware
+
 ```bash
 cd firmware
 make clean-all    # Complete clean
@@ -425,10 +254,11 @@ make tidy         # Run linting
 ```
 
 ### Mobile App Development
+
 ```bash
 cd mobile-app/AICompanionApp
-npm run android   # Run on Android device
 npm run start     # Start Metro bundler
+npm run android   # Run on Android device
 ```
 
 ## 📋 Requirements Fulfilled
@@ -444,30 +274,35 @@ npm run start     # Start Metro bundler
 ## 🔐 BLE Security & Device Management Roadmap
 
 ### Phase 1: Basic Security (High Priority)
+
 - [ ] **Implement BLE Bonding**: Add persistent secure connections with encryption keys
 - [ ] **Device Authentication**: Add PIN/passkey verification for initial pairing
 - [ ] **Connection Encryption**: Enable BLE encryption for all data transmission
 - [ ] **Custom Security Callbacks**: Implement security event handlers for ESP32
 
 ### Phase 2: Access Control (Medium Priority)
+
 - [ ] **Device Whitelisting**: Create approved device list with MAC address filtering
 - [ ] **Connection Rate Limiting**: Prevent brute force connection attempts
 - [ ] **Automatic Reconnection**: Implement secure reconnection to bonded devices
 - [ ] **Connection Timeouts**: Add configurable connection timeout and auto-disconnect
 
 ### Phase 3: Device Management (Medium Priority)
+
 - [ ] **Bonded Device Storage**: Store bonded device information in ESP32 flash memory
 - [ ] **Device Management UI**: Add UI in mobile app to view/manage bonded devices
 - [ ] **Remove Bonded Device**: Implement unpairing functionality from both ESP32 and app
 - [ ] **Device Nicknames**: Allow users to assign names to bonded devices
 
 ### Phase 4: Advanced Security (Low Priority)
+
 - [ ] **Message Encryption**: Implement AES encryption for JSON payloads
 - [ ] **Certificate-based Auth**: Add certificate validation for device authentication
 - [ ] **OTA Security Updates**: Secure firmware update mechanism
 - [ ] **Security Audit Logging**: Log all security events and connection attempts
 
 ### Phase 5: User Experience (Medium Priority)
+
 - [ ] **Pairing Mode UI**: Visual indication when ESP32 is in pairing mode
 - [ ] **Connection Status**: Real-time security status indicators
 - [ ] **Security Settings**: User-configurable security options
@@ -476,18 +311,21 @@ npm run start     # Start Metro bundler
 ## 🎯 Additional Feature Roadmap
 
 ### AI & Interaction Features
+
 - [ ] Add more AI response templates with different personalities
 - [ ] Implement gesture controls on ESP32 touchscreen
 - [ ] Add notification system for AI responses
 - [ ] Voice input/output capabilities
 
 ### Hardware & Monitoring
+
 - [ ] Enhance battery monitoring with detailed statistics
 - [ ] Add temperature/humidity sensors
 - [ ] Implement power management features
 - [ ] Add haptic feedback for interactions
 
 ### Development & Deployment
+
 - [ ] Add OTA firmware updates with rollback capability
 - [ ] Implement automated testing for BLE communication
 - [ ] Add comprehensive logging and debugging tools
@@ -513,14 +351,15 @@ This is a complete working proof of concept system featuring:
 - **User Experience Focus**: Polished UI/UX on both device and mobile app
 - **Security Awareness**: Documented security considerations and improvement roadmap
 
-The system demonstrates real-time communication between ESP32 and Android device, making it ideal for showcasing wearable AI companion concepts to stakeholders, investors, or development teams.
+The system demonstrates real-time BLE communication between ESP32 and Android device, making it ideal for showcasing touch interface and mobile connectivity concepts to stakeholders, investors, or development teams.
 
 **Note**: This focuses on communication flow and user experience. AI backend integration can be added as the next development phase.
 
 ## Original Requirements
 
-Wearable AI Assistant Companion Device
-Design and implement a wearable companion device (using Arduino/ESP32 or similar microcontroller with a small display) that acts as a simple interface to an AI assistant.
+Touch Interface Communication Device
+Design and implement a physical touch device (using Arduino/ESP32 or similar microcontroller with a small display) that communicates with a mobile application.
+
 Requirements:
 The device should have a screen that can display surface messages (e.g., short AI assistant prompts, notifications, or mock responses).
 
